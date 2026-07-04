@@ -1,0 +1,1256 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Somnia — Pelacak Pola Tidur</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.0/chart.umd.min.js"></script>
+<style>
+/* ============================================================
+   DESIGN TOKENS
+   ============================================================ */
+:root{
+  --bg: #0a0e1a;
+  --bg-soft: #0d1220;
+  --glass: rgba(255,255,255,0.045);
+  --glass-strong: rgba(255,255,255,0.07);
+  --glass-border: rgba(255,255,255,0.09);
+  --text: #e9ecf5;
+  --text-muted: #8890a8;
+  --text-faint: #565d77;
+  --accent: #8b9cff;      /* moonlight indigo */
+  --accent-2: #c9a8ff;    /* dawn violet */
+  --accent-warm: #ffb37b; /* sunrise */
+  --green: #4ade80;
+  --yellow: #fbbf24;
+  --orange: #fb923c;
+  --red: #f87171;
+  --radius-lg: 20px;
+  --radius-md: 14px;
+  --radius-sm: 10px;
+  --shadow-soft: 0 8px 32px rgba(0,0,0,0.35);
+  --font-display: 'Outfit', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+*{box-sizing:border-box; margin:0; padding:0;}
+html{scroll-behavior:smooth;}
+body{
+  background:
+    radial-gradient(ellipse 120% 60% at 50% -10%, rgba(139,156,255,0.14), transparent 60%),
+    radial-gradient(ellipse 80% 50% at 90% 10%, rgba(201,168,255,0.08), transparent 60%),
+    var(--bg);
+  color:var(--text);
+  font-family:var(--font-body);
+  min-height:100vh;
+  padding-bottom:90px;
+  -webkit-font-smoothing:antialiased;
+}
+@media(prefers-reduced-motion: reduce){ *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;} }
+
+::selection{background:var(--accent); color:#0a0e1a;}
+a{color:inherit;}
+button{font-family:inherit; cursor:pointer;}
+input,select{font-family:inherit;}
+
+.glass{
+  background:var(--glass);
+  border:1px solid var(--glass-border);
+  backdrop-filter:blur(18px);
+  -webkit-backdrop-filter:blur(18px);
+  border-radius:var(--radius-lg);
+}
+
+.container{max-width:1180px; margin:0 auto; padding:0 18px;}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+header.topbar{
+  position:sticky; top:0; z-index:40;
+  backdrop-filter:blur(20px); -webkit-backdrop-filter:blur(20px);
+  background:rgba(10,14,26,0.72);
+  border-bottom:1px solid var(--glass-border);
+}
+.topbar-inner{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:14px 18px; max-width:1180px; margin:0 auto;
+}
+.brand{display:flex; align-items:center; gap:10px;}
+.brand-mark{
+  width:34px; height:34px; border-radius:10px;
+  background:linear-gradient(145deg, var(--accent), var(--accent-2));
+  display:flex; align-items:center; justify-content:center;
+  font-size:18px; box-shadow:0 4px 16px rgba(139,156,255,0.35);
+}
+.brand-name{font-family:var(--font-display); font-weight:700; font-size:19px; letter-spacing:-0.01em;}
+.brand-sub{font-size:11px; color:var(--text-faint); margin-top:-2px;}
+
+.header-actions{display:flex; align-items:center; gap:10px;}
+.btn{
+  border:none; border-radius:var(--radius-sm);
+  padding:10px 16px; font-weight:600; font-size:13.5px;
+  transition:transform .15s ease, filter .15s ease, background .15s ease;
+  display:inline-flex; align-items:center; gap:6px; white-space:nowrap;
+}
+.btn:active{transform:scale(0.96);}
+.btn-primary{background:linear-gradient(135deg, var(--accent), var(--accent-2)); color:#0a0e1a;}
+.btn-primary:hover{filter:brightness(1.08);}
+.btn-ghost{background:var(--glass-strong); color:var(--text); border:1px solid var(--glass-border);}
+.btn-ghost:hover{background:rgba(255,255,255,0.1);}
+.btn-icon{padding:9px; border-radius:10px; background:var(--glass-strong); border:1px solid var(--glass-border); color:var(--text-muted);}
+.btn-icon:hover{color:var(--text);}
+.btn-danger{background:rgba(248,113,113,0.14); color:#fca5a5; border:1px solid rgba(248,113,113,0.25);}
+.btn-danger:hover{background:rgba(248,113,113,0.22);}
+.btn-sm{padding:7px 12px; font-size:12.5px; border-radius:8px;}
+
+/* Streak ring — signature element */
+.streak-ring{
+  position:relative; width:44px; height:44px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+}
+.streak-ring svg{position:absolute; inset:0; transform:rotate(-90deg);}
+.streak-ring-value{font-family:var(--font-mono); font-weight:700; font-size:13px; z-index:1;}
+
+/* Nav pills */
+.nav-pills{
+  display:flex; gap:8px; overflow-x:auto; padding:10px 18px 12px;
+  scrollbar-width:none; max-width:1180px; margin:0 auto;
+}
+.nav-pills::-webkit-scrollbar{display:none;}
+.nav-pill{
+  flex-shrink:0; padding:7px 14px; border-radius:100px; font-size:12.5px; font-weight:600;
+  color:var(--text-muted); background:var(--glass); border:1px solid var(--glass-border);
+  text-decoration:none; transition:all .15s ease;
+}
+.nav-pill:hover, .nav-pill.active{color:var(--bg); background:var(--text);}
+
+main{max-width:1180px; margin:0 auto; padding:22px 18px 40px;}
+section{margin-bottom:34px; scroll-margin-top:120px;}
+.section-head{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:14px; gap:10px; flex-wrap:wrap;}
+.section-title{font-family:var(--font-display); font-size:20px; font-weight:700; letter-spacing:-0.01em;}
+.section-hint{font-size:12.5px; color:var(--text-faint);}
+
+/* ============================================================
+   INSIGHT BANNER
+   ============================================================ */
+.insight-banner{
+  padding:20px 22px; border-radius:var(--radius-lg);
+  background:linear-gradient(120deg, rgba(139,156,255,0.12), rgba(201,168,255,0.06));
+  border:1px solid rgba(139,156,255,0.2);
+  display:flex; flex-direction:column; gap:10px;
+}
+.insight-item{display:flex; align-items:flex-start; gap:10px; font-size:13.5px; line-height:1.5; color:var(--text);}
+.insight-item .dot{width:6px; height:6px; border-radius:50%; background:var(--accent); margin-top:6px; flex-shrink:0;}
+.insight-empty{color:var(--text-faint); font-size:13.5px;}
+
+/* ============================================================
+   STATS GRID
+   ============================================================ */
+.stats-grid{
+  display:grid; grid-template-columns:repeat(auto-fit, minmax(150px,1fr)); gap:12px;
+}
+.stat-card{
+  padding:16px 16px; display:flex; flex-direction:column; gap:6px;
+  transition:transform .2s ease;
+}
+.stat-card:hover{transform:translateY(-2px);}
+.stat-label{font-size:11.5px; color:var(--text-faint); font-weight:600; text-transform:uppercase; letter-spacing:0.04em;}
+.stat-value{font-family:var(--font-mono); font-size:22px; font-weight:700; color:var(--text);}
+.stat-value.accent{color:var(--accent);}
+.stat-sub{font-size:11.5px; color:var(--text-muted);}
+
+/* ============================================================
+   FORM MODAL
+   ============================================================ */
+.modal-overlay{
+  position:fixed; inset:0; background:rgba(5,7,14,0.72); backdrop-filter:blur(4px);
+  z-index:100; display:none; align-items:flex-end; justify-content:center;
+}
+.modal-overlay.open{display:flex; animation:fadeIn .2s ease;}
+@keyframes fadeIn{from{opacity:0;} to{opacity:1;}}
+.modal{
+  width:100%; max-width:460px; background:var(--bg-soft);
+  border:1px solid var(--glass-border); border-radius:22px 22px 0 0;
+  padding:22px 22px calc(22px + env(safe-area-inset-bottom));
+  animation:slideUp .25s cubic-bezier(.2,.9,.3,1);
+  max-height:88vh; overflow-y:auto;
+}
+@media(min-width:640px){
+  .modal-overlay{align-items:center;}
+  .modal{border-radius:22px; max-width:420px;}
+}
+@keyframes slideUp{from{transform:translateY(30px); opacity:0;} to{transform:translateY(0); opacity:1;}}
+.modal-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:18px;}
+.modal-title{font-family:var(--font-display); font-size:18px; font-weight:700;}
+.close-btn{background:none; border:none; color:var(--text-muted); padding:4px; display:flex; align-items:center; justify-content:center; border-radius:6px;}
+.close-btn:hover{color:var(--text); background:var(--glass-strong);}
+
+.field{margin-bottom:16px;}
+.field label{display:block; font-size:12.5px; font-weight:600; color:var(--text-muted); margin-bottom:7px;}
+.field input{
+  width:100%; padding:12px 14px; border-radius:var(--radius-sm);
+  background:rgba(255,255,255,0.04); border:1px solid var(--glass-border);
+  color:var(--text); font-size:15px; font-family:var(--font-mono);
+  transition:border-color .15s ease;
+}
+.field input:focus{outline:none; border-color:var(--accent);}
+.field-row{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+.modal-actions{display:flex; gap:10px; margin-top:6px;}
+.modal-actions .btn{flex:1; justify-content:center;}
+
+/* ============================================================
+   CHARTS
+   ============================================================ */
+.chart-card{padding:18px; }
+.chart-tabs{display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap;}
+.chart-tab{
+  padding:6px 13px; border-radius:100px; font-size:12px; font-weight:600;
+  background:var(--glass-strong); border:1px solid var(--glass-border); color:var(--text-muted);
+}
+.chart-tab.active{background:var(--accent); color:#0a0e1a; border-color:var(--accent);}
+.chart-wrap{position:relative; height:260px;}
+
+/* ============================================================
+   HISTORY TABLE
+   ============================================================ */
+.table-controls{display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap;}
+.table-controls input, .table-controls select{
+  padding:9px 13px; border-radius:var(--radius-sm); background:var(--glass);
+  border:1px solid var(--glass-border); color:var(--text); font-size:13px;
+}
+.table-controls input{flex:1; min-width:140px;}
+.search-box{position:relative; flex:1; min-width:140px; display:flex; align-items:center;}
+.search-box svg{position:absolute; left:12px; color:var(--text-faint); pointer-events:none;}
+.search-box input{width:100%; padding-left:34px;}
+.table-wrap{overflow-x:auto; border-radius:var(--radius-lg);}
+table{width:100%; border-collapse:collapse; min-width:720px;}
+thead th{
+  text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:0.04em;
+  color:var(--text-faint); font-weight:600; padding:10px 14px; border-bottom:1px solid var(--glass-border);
+  cursor:pointer; white-space:nowrap; user-select:none;
+}
+thead th:hover{color:var(--text-muted);}
+tbody td{padding:12px 14px; font-size:13px; border-bottom:1px solid rgba(255,255,255,0.04); white-space:nowrap;}
+tbody tr{transition:background .15s ease;}
+tbody tr:hover{background:rgba(255,255,255,0.025);}
+.mono{font-family:var(--font-mono);}
+.diff-up{color:var(--orange);}
+.diff-down{color:var(--accent);}
+.diff-zero{color:var(--text-faint);}
+.badge{
+  display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:100px;
+  font-size:11.5px; font-weight:600;
+}
+.badge-green{background:rgba(74,222,128,0.14); color:var(--green);}
+.badge-yellow{background:rgba(251,191,36,0.14); color:var(--yellow);}
+.badge-orange{background:rgba(251,146,60,0.14); color:var(--orange);}
+.badge-red{background:rgba(248,113,113,0.14); color:var(--red);}
+.badge-none{background:var(--glass-strong); color:var(--text-faint);}
+.row-actions{display:flex; gap:6px;}
+.icon-btn{
+  background:none; border:none; color:var(--text-faint); padding:5px; border-radius:6px;
+  display:inline-flex; align-items:center; justify-content:center;
+}
+.icon-btn:hover{color:var(--text); background:var(--glass-strong);}
+.empty-state{padding:50px 20px; text-align:center; color:var(--text-faint);}
+.empty-state .big{margin-bottom:10px; display:flex; justify-content:center; color:var(--text-faint);}
+
+/* ============================================================
+   REMINDER + DATA PANELS
+   ============================================================ */
+.panel-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+@media(max-width:760px){.panel-grid{grid-template-columns:1fr;}}
+.panel{padding:20px;}
+.panel-title{font-family:var(--font-display); font-weight:700; font-size:15px; margin-bottom:14px; display:flex; align-items:center; gap:8px;}
+.countdown-box{
+  text-align:center; padding:18px; border-radius:var(--radius-md);
+  background:rgba(139,156,255,0.08); margin-top:14px;
+}
+.countdown-value{font-family:var(--font-mono); font-size:30px; font-weight:700; color:var(--accent); letter-spacing:0.02em;}
+.countdown-label{font-size:11.5px; color:var(--text-faint); margin-top:4px;}
+.toggle-row{display:flex; align-items:center; justify-content:space-between; margin-top:14px; font-size:13px; color:var(--text-muted);}
+.switch{position:relative; width:42px; height:24px; border-radius:100px; background:var(--glass-strong); border:1px solid var(--glass-border); transition:.2s;}
+.switch::after{content:''; position:absolute; width:18px; height:18px; border-radius:50%; background:var(--text-muted); top:2px; left:2px; transition:.2s;}
+.switch.on{background:var(--accent); border-color:var(--accent);}
+.switch.on::after{transform:translateX(18px); background:#0a0e1a;}
+
+.data-actions{display:flex; flex-wrap:wrap; gap:8px; margin-top:6px;}
+.file-input-hidden{display:none;}
+
+.toast{
+  position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(20px);
+  background:var(--text); color:var(--bg); padding:12px 20px; border-radius:100px;
+  font-size:13px; font-weight:600; box-shadow:var(--shadow-soft); z-index:200;
+  opacity:0; pointer-events:none; transition:all .25s ease;
+}
+.toast.show{opacity:1; transform:translateX(-50%) translateY(0);}
+
+/* Floating add button (mobile) */
+.fab{
+  position:fixed; bottom:20px; right:20px; z-index:50;
+  width:56px; height:56px; border-radius:50%; border:none;
+  background:linear-gradient(135deg, var(--accent), var(--accent-2));
+  color:#0a0e1a; font-size:26px; box-shadow:0 8px 24px rgba(139,156,255,0.4);
+  display:flex; align-items:center; justify-content:center;
+}
+.fab:active{transform:scale(0.92);}
+
+footer{text-align:center; padding:20px; color:var(--text-faint); font-size:11.5px;}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="brand-mark"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0a0e1a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></div>
+      <div>
+        <div class="brand-name">Somnia</div>
+        <div class="brand-sub">Pelacak pola tidur</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <div class="streak-ring" id="streakRing" title="Streak konsisten">
+        <svg width="44" height="44"><circle cx="22" cy="22" r="19" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="4"/><circle id="streakRingArc" cx="22" cy="22" r="19" fill="none" stroke="url(#streakGrad)" stroke-width="4" stroke-linecap="round" stroke-dasharray="119.4" stroke-dashoffset="119.4"/><defs><linearGradient id="streakGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#8b9cff"/><stop offset="100%" stop-color="#c9a8ff"/></linearGradient></defs></svg>
+        <span class="streak-ring-value" id="streakValue">0</span>
+      </div>
+      <button class="btn btn-primary" id="openAddModalBtn">+ Catat</button>
+    </div>
+  </div>
+  <nav class="nav-pills">
+    <a href="#insight" class="nav-pill">Ringkasan</a>
+    <a href="#statistik" class="nav-pill">Statistik</a>
+    <a href="#grafik" class="nav-pill">Grafik</a>
+    <a href="#riwayat" class="nav-pill">Riwayat</a>
+    <a href="#pengingat" class="nav-pill">Pengingat</a>
+    <a href="#data" class="nav-pill">Data</a>
+  </nav>
+</header>
+
+<main>
+
+  <!-- INSIGHT -->
+  <section id="insight">
+    <div class="section-head">
+      <div>
+        <div class="section-title">Analisis Otomatis</div>
+        <div class="section-hint">Pola tidurmu, dirangkum</div>
+      </div>
+    </div>
+    <div class="insight-banner glass" id="insightBanner">
+      <div class="insight-empty">Belum cukup data untuk dianalisis. Catat minimal beberapa hari untuk melihat wawasan di sini.</div>
+    </div>
+  </section>
+
+  <!-- STATS -->
+  <section id="statistik">
+    <div class="section-head">
+      <div>
+        <div class="section-title">Statistik</div>
+        <div class="section-hint">Ringkasan dari seluruh catatan</div>
+      </div>
+    </div>
+    <div class="stats-grid" id="statsGrid"></div>
+  </section>
+
+  <!-- CHARTS -->
+  <section id="grafik">
+    <div class="section-head">
+      <div>
+        <div class="section-title">Grafik</div>
+        <div class="section-hint">Tren 30 catatan terakhir</div>
+      </div>
+    </div>
+    <div class="chart-card glass">
+      <div class="chart-tabs">
+        <button class="chart-tab active" data-chart="sleep">Jam Tidur</button>
+        <button class="chart-tab" data-chart="wake">Jam Bangun</button>
+        <button class="chart-tab" data-chart="duration">Durasi Tidur</button>
+      </div>
+      <div class="chart-wrap"><canvas id="mainChart"></canvas></div>
+    </div>
+  </section>
+
+  <!-- HISTORY -->
+  <section id="riwayat">
+    <div class="section-head">
+      <div>
+        <div class="section-title">Riwayat</div>
+        <div class="section-hint">Semua catatan tidurmu</div>
+      </div>
+    </div>
+    <div class="table-controls">
+      <div class="search-box">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="text" id="searchInput" placeholder="Cari berdasarkan tanggal...">
+      </div>
+      <select id="monthFilter"><option value="">Semua bulan</option></select>
+      <select id="sortOrder">
+        <option value="desc">Terbaru dulu</option>
+        <option value="asc">Terlama dulu</option>
+      </select>
+    </div>
+    <div class="table-wrap glass">
+      <table id="historyTable">
+        <thead>
+          <tr>
+            <th data-sort="date">Tanggal</th>
+            <th data-sort="sleep">Tidur</th>
+            <th data-sort="wake">Bangun</th>
+            <th data-sort="duration">Durasi</th>
+            <th>Selisih Tidur</th>
+            <th>Selisih Bangun</th>
+            <th>Status</th>
+            <th>Aksi</th>
+          </tr>
+        </thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+      <div class="empty-state" id="emptyState" style="display:none;">
+        <div class="big"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg></div>
+        <div>Belum ada catatan. Mulai dengan menekan tombol "+ Catat".</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- REMINDER + DATA -->
+  <div class="panel-grid">
+    <section id="pengingat" style="margin-bottom:0;">
+      <div class="section-head"><div class="section-title">Pengingat</div></div>
+      <div class="panel glass">
+        <div class="panel-title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg> Target Tidur</div>
+        <div class="field-row">
+          <div class="field">
+            <label>Target jam tidur</label>
+            <input type="time" id="targetSleep">
+          </div>
+          <div class="field">
+            <label>Target jam bangun</label>
+            <input type="time" id="targetWake">
+          </div>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="saveTargetBtn">Simpan Target</button>
+        <div class="countdown-box">
+          <div class="countdown-value" id="countdownValue">--:--</div>
+          <div class="countdown-label" id="countdownLabel">Menuju waktu tidur</div>
+        </div>
+        <div class="toggle-row">
+          <span>Notifikasi pengingat (15 menit sebelum)</span>
+          <button class="switch" id="notifToggle"></button>
+        </div>
+      </div>
+    </section>
+
+    <section id="data" style="margin-bottom:0;">
+      <div class="section-head"><div class="section-title">Data</div></div>
+      <div class="panel glass">
+        <div class="panel-title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Ekspor &amp; Impor</div>
+        <div class="data-actions">
+          <button class="btn btn-ghost btn-sm" id="exportCsvBtn">Ekspor CSV</button>
+          <button class="btn btn-ghost btn-sm" id="exportJsonBtn">Ekspor JSON</button>
+          <button class="btn btn-ghost btn-sm" id="importBtn">Impor Data</button>
+          <input type="file" id="importFile" class="file-input-hidden" accept=".csv,.json">
+        </div>
+        <div class="panel-title" style="margin-top:20px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg> Backup &amp; Restore</div>
+        <div class="data-actions">
+          <button class="btn btn-ghost btn-sm" id="backupBtn">Backup Semua Data</button>
+          <button class="btn btn-ghost btn-sm" id="restoreBtn">Restore dari Backup</button>
+          <input type="file" id="restoreFile" class="file-input-hidden" accept=".json">
+        </div>
+        <div class="panel-title" style="margin-top:20px;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg> Zona Berbahaya</div>
+        <div class="data-actions">
+          <button class="btn btn-danger btn-sm" id="clearAllBtn">Hapus Semua Data</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+</main>
+
+<footer>Somnia · data tersimpan lokal di perangkatmu · tidak ada yang dikirim ke server</footer>
+
+<button class="fab" id="fabAdd" title="Tambah catatan">+</button>
+
+<!-- MODAL: Add/Edit entry -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title" id="modalTitle">Catat Tidur</div>
+      <button class="close-btn" id="modalCloseBtn"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <form id="entryForm">
+      <input type="hidden" id="entryId">
+      <div class="field">
+        <label>Tanggal</label>
+        <input type="date" id="entryDate" required>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Jam tidur</label>
+          <input type="time" id="entrySleep" required>
+        </div>
+        <div class="field">
+          <label>Jam bangun</label>
+          <input type="time" id="entryWake" required>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-danger" id="deleteEntryBtn" style="display:none;">Hapus</button>
+        <button type="submit" class="btn btn-primary" id="saveEntryBtn">Simpan</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ==================================================================
+   SOMNIA — SLEEP TRACKER
+   Struktur modul:
+   - TimeUtils   : konversi & perhitungan waktu (menangani lewat tengah malam)
+   - Storage     : baca/tulis localStorage
+   - Stats       : perhitungan statistik & analisis
+   - Renderer    : render UI (stats, table, insight, chart)
+   - Reminder    : pengingat & notifikasi
+   - App         : inisialisasi & event handling
+   ================================================================== */
+
+/* ---------------------------------------------------------------
+   ICONS — SVG string constants (no emoji used anywhere in the UI)
+   --------------------------------------------------------------- */
+const ICON = {
+  edit: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>`,
+  trash: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`,
+  close: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`,
+  dot: `<svg width="8" height="8" viewBox="0 0 8 8" fill="currentColor"><circle cx="4" cy="4" r="4"/></svg>`,
+};
+
+/* ---------------------------------------------------------------
+   TIME UTILS
+   --------------------------------------------------------------- */
+const TimeUtils = {
+  // "HH:MM" -> menit sejak 00:00
+  toMinutes(hhmm){
+    const [h,m] = hhmm.split(':').map(Number);
+    return h*60+m;
+  },
+  // menit -> "HH:MM"
+  toHHMM(mins){
+    mins = ((mins % 1440) + 1440) % 1440;
+    const h = Math.floor(mins/60).toString().padStart(2,'0');
+    const m = Math.floor(mins%60).toString().padStart(2,'0');
+    return `${h}:${m}`;
+  },
+  // Durasi tidur dalam menit. Menangani kasus tidur melewati tengah malam:
+  // jika jam bangun <= jam tidur (dalam skala 24 jam), dianggap bangun di hari berikutnya.
+  duration(sleepMin, wakeMin){
+    let d = wakeMin - sleepMin;
+    if(d <= 0) d += 1440;
+    return d;
+  },
+  durationLabel(mins){
+    const h = Math.floor(mins/60), m = mins%60;
+    return `${h}j ${m}m`;
+  },
+  // Selisih waktu jam (bukan durasi) antara dua titik waktu di skala 24 jam,
+  // dihitung secara "melingkar" agar 23:45 -> 00:15 terbaca sebagai +30 menit,
+  // bukan -1410 menit. Hasil di rentang (-720, 720].
+  circularDiff(currMin, prevMin){
+    let d = currMin - prevMin;
+    d = (((d + 720) % 1440) + 1440) % 1440 - 720;
+    return d;
+  },
+  diffLabel(diffMin, laterWord, earlierWord){
+    if(diffMin === 0) return `Sama seperti kemarin`;
+    const abs = Math.abs(diffMin);
+    const h = Math.floor(abs/60), m = abs%60;
+    const dur = h>0 ? `${h} jam ${m} menit` : `${m} menit`;
+    return diffMin > 0 ? `${laterWord} ${dur} dari kemarin` : `${earlierWord} ${dur} dari kemarin`;
+  },
+  // Rata-rata melingkar untuk kumpulan jam (mis. rata-rata jam tidur / bangun),
+  // agar nilai seperti 23:50 dan 00:10 tidak "membatalkan" satu sama lain
+  // seperti pada rata-rata aritmetika biasa.
+  circularMean(minsArray){
+    if(minsArray.length === 0) return null;
+    let sinSum=0, cosSum=0;
+    minsArray.forEach(m=>{
+      const rad = (m/1440)*2*Math.PI;
+      sinSum += Math.sin(rad); cosSum += Math.cos(rad);
+    });
+    let rad = Math.atan2(sinSum/minsArray.length, cosSum/minsArray.length);
+    if(rad < 0) rad += 2*Math.PI;
+    return Math.round((rad/(2*Math.PI))*1440) % 1440;
+  },
+  // Menggeser jam malam (sebelum tengah hari) ke atas +24 jam agar bisa dibandingkan
+  // secara linear. Berguna untuk mencari bedtime "paling awal/paling malam".
+  shiftEvening(m){ return m < 720 ? m + 1440 : m; },
+  todayStr(){
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  },
+  nowMinutes(){
+    const d = new Date();
+    return d.getHours()*60+d.getMinutes()+d.getSeconds()/60;
+  }
+};
+
+/* ---------------------------------------------------------------
+   STORAGE
+   --------------------------------------------------------------- */
+const Storage = {
+  ENTRIES_KEY: 'somnia_entries_v1',
+  SETTINGS_KEY: 'somnia_settings_v1',
+  getEntries(){
+    try{ return JSON.parse(localStorage.getItem(this.ENTRIES_KEY)) || []; }
+    catch(e){ return []; }
+  },
+  saveEntries(entries){ localStorage.setItem(this.ENTRIES_KEY, JSON.stringify(entries)); },
+  getSettings(){
+    try{
+      return Object.assign({
+        targetSleep:'23:00', targetWake:'07:00', notifyEnabled:false, lastNotifiedDate:''
+      }, JSON.parse(localStorage.getItem(this.SETTINGS_KEY)) || {});
+    }catch(e){
+      return { targetSleep:'23:00', targetWake:'07:00', notifyEnabled:false, lastNotifiedDate:'' };
+    }
+  },
+  saveSettings(s){ localStorage.setItem(this.SETTINGS_KEY, JSON.stringify(s)); }
+};
+
+/* ---------------------------------------------------------------
+   STATS / ANALYTICS
+   Mengembalikan entries yang sudah diperkaya dengan durasi, selisih,
+   dan status konsistensi berdasarkan entry sebelumnya (kronologis).
+   --------------------------------------------------------------- */
+const Stats = {
+  // Ambang batas status konsistensi berdasarkan deviasi maksimum
+  // antara selisih jam tidur & selisih jam bangun dibanding hari sebelumnya.
+  statusFor(diffMin){
+    const abs = Math.abs(diffMin);
+    if(abs <= 15) return {key:'green', label:'Sangat Konsisten'};
+    if(abs <= 30) return {key:'yellow', label:'Cukup Konsisten'};
+    if(abs <= 60) return {key:'orange', label:'Kurang Konsisten'};
+    return {key:'red', label:'Tidak Konsisten'};
+  },
+  enrich(entries){
+    const sorted = [...entries].sort((a,b)=> a.date.localeCompare(b.date));
+    let prev = null;
+    return sorted.map(e=>{
+      const sleepMin = TimeUtils.toMinutes(e.sleep);
+      const wakeMin = TimeUtils.toMinutes(e.wake);
+      const durationMin = TimeUtils.duration(sleepMin, wakeMin);
+      let sleepDiff=null, wakeDiff=null, durationDiff=null, status=null;
+      if(prev){
+        sleepDiff = TimeUtils.circularDiff(sleepMin, prev.sleepMin);
+        wakeDiff = TimeUtils.circularDiff(wakeMin, prev.wakeMin);
+        durationDiff = durationMin - prev.durationMin;
+        // status diambil dari deviasi terbesar antara jam tidur & jam bangun,
+        // karena keduanya sama-sama merepresentasikan "jam biologis" pengguna.
+        const worst = Math.max(Math.abs(sleepDiff), Math.abs(wakeDiff));
+        status = this.statusFor(worst);
+      }
+      const enriched = { ...e, sleepMin, wakeMin, durationMin, sleepDiff, wakeDiff, durationDiff, status };
+      prev = enriched;
+      return enriched;
+    });
+  },
+  summary(enriched){
+    if(enriched.length === 0) return null;
+    const sleepMins = enriched.map(e=>e.sleepMin);
+    const wakeMins = enriched.map(e=>e.wakeMin);
+    const durations = enriched.map(e=>e.durationMin);
+    const withStatus = enriched.filter(e=>e.status);
+
+    const avgSleep = TimeUtils.circularMean(sleepMins);
+    const avgWake = TimeUtils.circularMean(wakeMins);
+    const avgDuration = Math.round(durations.reduce((a,b)=>a+b,0)/durations.length);
+
+    // Paling awal/malam tidur menggunakan penggeseran agar jam dini hari
+    // terbaca "lebih malam" daripada jam malam sebelumnya.
+    const shiftedSleep = enriched.map(e=>({...e, shifted: TimeUtils.shiftEvening(e.sleepMin)}));
+    const earliestSleep = shiftedSleep.reduce((a,b)=> a.shifted<b.shifted?a:b);
+    const latestSleep = shiftedSleep.reduce((a,b)=> a.shifted>b.shifted?a:b);
+    const earliestWake = enriched.reduce((a,b)=> a.wakeMin<b.wakeMin?a:b);
+    const latestWake = enriched.reduce((a,b)=> a.wakeMin>b.wakeMin?a:b);
+
+    const consistentCount = withStatus.filter(e=> e.status.key==='green' || e.status.key==='yellow').length;
+    const consistentPct = withStatus.length ? Math.round((consistentCount/withStatus.length)*100) : 0;
+
+    // Streak: hitung mundur dari entry terbaru selama status hijau/kuning.
+    let streak = 0;
+    for(let i=enriched.length-1;i>=0;i--){
+      const e = enriched[i];
+      if(!e.status) break;
+      if(e.status.key==='green' || e.status.key==='yellow') streak++;
+      else break;
+    }
+
+    return {
+      avgSleep, avgWake, avgDuration,
+      earliestSleep, latestSleep, earliestWake, latestWake,
+      totalDays: enriched.length,
+      consistentPct, streak
+    };
+  },
+  // Analisis naratif sederhana berbasis heuristik minggu ini vs minggu lalu.
+  insights(enriched){
+    const out = [];
+    if(enriched.length < 3){
+      return out;
+    }
+    const now = new Date();
+    const dayMs = 86400000;
+    const cutThis = new Date(now - 7*dayMs);
+    const cutLast = new Date(now - 14*dayMs);
+
+    const thisWeek = enriched.filter(e => new Date(e.date) >= cutThis);
+    const lastWeek = enriched.filter(e => new Date(e.date) >= cutLast && new Date(e.date) < cutThis);
+
+    const stddev = (arr) => {
+      if(arr.length < 2) return null;
+      const mean = TimeUtils.circularMean(arr);
+      const sqDiffs = arr.map(m => { const d = TimeUtils.circularDiff(m, mean); return d*d; });
+      return Math.sqrt(sqDiffs.reduce((a,b)=>a+b,0)/arr.length);
+    };
+
+    if(thisWeek.length >= 2 && lastWeek.length >= 2){
+      const sdThis = stddev(thisWeek.map(e=>e.sleepMin));
+      const sdLast = stddev(lastWeek.map(e=>e.sleepMin));
+      if(sdThis !== null && sdLast !== null){
+        if(sdThis < sdLast - 3){
+          out.push('Jam tidur Anda semakin stabil dibanding minggu lalu. Pertahankan!');
+        } else if(sdThis > sdLast + 3){
+          out.push('Jam tidur Anda lebih berubah-ubah dibanding minggu lalu.');
+        }
+      }
+      const sdWakeThis = stddev(thisWeek.map(e=>e.wakeMin));
+      if(sdWakeThis !== null && sdWakeThis <= 15){
+        out.push('Perubahan jam bangun minggu ini sangat kecil, pertahankan.');
+      }
+    }
+
+    if(thisWeek.length >= 3){
+      const totalMin = thisWeek.reduce((a,e)=>a+e.durationMin,0);
+      const avg = Math.round(totalMin/thisWeek.length);
+      out.push(`Rata-rata durasi tidur minggu ini ${TimeUtils.durationLabel(avg)}.`);
+    }
+
+    // Bandingkan bedtime akhir pekan (Jum/Sab malam) vs hari kerja
+    const weekend = enriched.filter(e=>{ const d = new Date(e.date).getDay(); return d===5||d===6; });
+    const weekday = enriched.filter(e=>{ const d = new Date(e.date).getDay(); return d>=0 && d<=4; });
+    if(weekend.length >= 2 && weekday.length >= 2){
+      const avgWeekend = TimeUtils.circularMean(weekend.map(e=>TimeUtils.shiftEvening(e.sleepMin)));
+      const avgWeekday = TimeUtils.circularMean(weekday.map(e=>TimeUtils.shiftEvening(e.sleepMin)));
+      const diff = avgWeekend - avgWeekday;
+      if(diff > 40){
+        out.push('Anda sering tidur lebih larut pada akhir pekan.');
+      }
+    }
+    return out;
+  }
+};
+
+/* ---------------------------------------------------------------
+   APP STATE
+   --------------------------------------------------------------- */
+let entries = Storage.getEntries();
+let settings = Storage.getSettings();
+let chartMode = 'sleep';
+let mainChartInstance = null;
+let sortKey = 'date';
+let sortDir = 'desc';
+
+function refresh(){
+  const enriched = Stats.enrich(entries);
+  Renderer.renderInsight(Stats.insights(enriched));
+  Renderer.renderStats(Stats.summary(enriched));
+  Renderer.renderStreakRing(Stats.summary(enriched));
+  Renderer.renderTable(enriched);
+  Renderer.renderChart(enriched);
+  Renderer.populateMonthFilter(entries);
+}
+
+/* ---------------------------------------------------------------
+   RENDERER
+   --------------------------------------------------------------- */
+const Renderer = {
+  renderInsight(list){
+    const el = document.getElementById('insightBanner');
+    if(list.length === 0){
+      el.innerHTML = `<div class="insight-empty">Belum cukup data untuk dianalisis. Catat minimal beberapa hari untuk melihat wawasan di sini.</div>`;
+      return;
+    }
+    el.innerHTML = list.map(t=>`<div class="insight-item"><span class="dot"></span><span>${t}</span></div>`).join('');
+  },
+
+  renderStreakRing(summary){
+    const pct = summary ? summary.consistentPct : 0;
+    const circumference = 119.4; // 2*pi*19
+    const offset = circumference - (circumference*pct/100);
+    document.getElementById('streakRingArc').style.strokeDashoffset = offset;
+    document.getElementById('streakValue').textContent = summary ? summary.streak : 0;
+  },
+
+  renderStats(s){
+    const grid = document.getElementById('statsGrid');
+    if(!s){
+      grid.innerHTML = `<div class="stat-card glass"><div class="stat-label">Belum ada data</div><div class="stat-sub">Tambahkan catatan pertamamu</div></div>`;
+      return;
+    }
+    const cards = [
+      {label:'Rata-rata Jam Tidur', value: TimeUtils.toHHMM(s.avgSleep)},
+      {label:'Rata-rata Jam Bangun', value: TimeUtils.toHHMM(s.avgWake)},
+      {label:'Rata-rata Durasi', value: TimeUtils.durationLabel(s.avgDuration)},
+      {label:'Tidur Paling Awal', value: TimeUtils.toHHMM(s.earliestSleep.sleepMin), sub: s.earliestSleep.date},
+      {label:'Tidur Paling Malam', value: TimeUtils.toHHMM(s.latestSleep.sleepMin), sub: s.latestSleep.date},
+      {label:'Bangun Paling Awal', value: TimeUtils.toHHMM(s.earliestWake.wakeMin), sub: s.earliestWake.date},
+      {label:'Bangun Paling Siang', value: TimeUtils.toHHMM(s.latestWake.wakeMin), sub: s.latestWake.date},
+      {label:'Total Hari Dicatat', value: s.totalDays},
+      {label:'Hari Konsisten', value: s.consistentPct+'%'},
+      {label:'Streak Konsisten', value: s.streak+' hari'},
+    ];
+    grid.innerHTML = cards.map(c=>`
+      <div class="stat-card glass">
+        <div class="stat-label">${c.label}</div>
+        <div class="stat-value accent">${c.value}</div>
+        ${c.sub ? `<div class="stat-sub">${c.sub}</div>` : ''}
+      </div>`).join('');
+  },
+
+  diffCell(diffMin){
+    if(diffMin === null || diffMin === undefined) return `<span class="diff-zero">—</span>`;
+    if(diffMin === 0) return `<span class="diff-zero">0m</span>`;
+    const abs = Math.abs(diffMin);
+    const h = Math.floor(abs/60), m = abs%60;
+    const label = (h>0?`${h}j `:'') + `${m}m`;
+    return diffMin > 0
+      ? `<span class="diff-up">▲ ${label}</span>`
+      : `<span class="diff-down">▼ ${label}</span>`;
+  },
+
+  statusBadge(status){
+    if(!status) return `<span class="badge badge-none">—</span>`;
+    return `<span class="badge badge-${status.key}">${ICON.dot} ${status.label}</span>`;
+  },
+
+  populateMonthFilter(list){
+    const sel = document.getElementById('monthFilter');
+    const current = sel.value;
+    const months = [...new Set(list.map(e=>e.date.slice(0,7)))].sort().reverse();
+    sel.innerHTML = `<option value="">Semua bulan</option>` + months.map(m=>{
+      const [y,mo] = m.split('-');
+      const label = new Date(y, mo-1, 1).toLocaleDateString('id-ID', {month:'long', year:'numeric'});
+      return `<option value="${m}">${label}</option>`;
+    }).join('');
+    sel.value = current;
+  },
+
+  renderTable(enriched){
+    const search = document.getElementById('searchInput').value.trim().toLowerCase();
+    const month = document.getElementById('monthFilter').value;
+    let list = [...enriched];
+
+    if(search) list = list.filter(e => e.date.toLowerCase().includes(search));
+    if(month) list = list.filter(e => e.date.startsWith(month));
+
+    list.sort((a,b)=>{
+      let av, bv;
+      switch(sortKey){
+        case 'sleep': av=a.sleepMin; bv=b.sleepMin; break;
+        case 'wake': av=a.wakeMin; bv=b.wakeMin; break;
+        case 'duration': av=a.durationMin; bv=b.durationMin; break;
+        default: av=a.date; bv=b.date;
+      }
+      if(av < bv) return sortDir==='asc' ? -1 : 1;
+      if(av > bv) return sortDir==='asc' ? 1 : -1;
+      return 0;
+    });
+
+    const body = document.getElementById('historyBody');
+    const emptyState = document.getElementById('emptyState');
+    if(list.length === 0){
+      body.innerHTML = '';
+      emptyState.style.display = 'block';
+      return;
+    }
+    emptyState.style.display = 'none';
+
+    body.innerHTML = list.map(e=>`
+      <tr>
+        <td>${formatDateHuman(e.date)}</td>
+        <td class="mono">${e.sleep}</td>
+        <td class="mono">${e.wake}</td>
+        <td class="mono">${TimeUtils.durationLabel(e.durationMin)}</td>
+        <td>${this.diffCell(e.sleepDiff)}</td>
+        <td>${this.diffCell(e.wakeDiff)}</td>
+        <td>${this.statusBadge(e.status)}</td>
+        <td>
+          <div class="row-actions">
+            <button class="icon-btn" title="Edit" onclick="App.openEdit('${e.id}')">${ICON.edit}</button>
+            <button class="icon-btn" title="Hapus" onclick="App.deleteEntry('${e.id}')">${ICON.trash}</button>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  },
+
+  renderChart(enriched){
+    const last30 = enriched.slice(-30);
+    const labels = last30.map(e => e.date.slice(5));
+    const ctx = document.getElementById('mainChart').getContext('2d');
+
+    let dataset, yCallback, chartLabel, lineColor;
+    if(chartMode === 'sleep'){
+      // Geser jam dini hari (+24j) supaya garis grafik tidak "melompat" turun ke 0
+      dataset = last30.map(e => TimeUtils.shiftEvening(e.sleepMin)/60);
+      yCallback = v => TimeUtils.toHHMM(Math.round(v*60));
+      chartLabel = 'Jam Tidur'; lineColor = '#8b9cff';
+    } else if(chartMode === 'wake'){
+      dataset = last30.map(e => e.wakeMin/60);
+      yCallback = v => TimeUtils.toHHMM(Math.round(v*60));
+      chartLabel = 'Jam Bangun'; lineColor = '#ffb37b';
+    } else {
+      dataset = last30.map(e => e.durationMin/60);
+      yCallback = v => v.toFixed(1)+'j';
+      chartLabel = 'Durasi Tidur (jam)'; lineColor = '#c9a8ff';
+    }
+
+    if(mainChartInstance) mainChartInstance.destroy();
+    mainChartInstance = new Chart(ctx, {
+      type:'line',
+      data:{
+        labels,
+        datasets:[{
+          label: chartLabel,
+          data: dataset,
+          borderColor: lineColor,
+          backgroundColor: lineColor+'22',
+          fill:true,
+          tension:0.35,
+          pointRadius:3,
+          pointBackgroundColor: lineColor,
+          borderWidth:2.5,
+        }]
+      },
+      options:{
+        responsive:true, maintainAspectRatio:false,
+        plugins:{
+          legend:{display:false},
+          tooltip:{
+            callbacks:{ label: (ctx)=> `${chartLabel}: ${yCallback(ctx.parsed.y)}` }
+          }
+        },
+        scales:{
+          x:{ ticks:{ color:'#8890a8', font:{family:"'JetBrains Mono', monospace", size:10} }, grid:{ color:'rgba(255,255,255,0.04)' } },
+          y:{ ticks:{ color:'#8890a8', font:{family:"'JetBrains Mono', monospace", size:10}, callback:yCallback }, grid:{ color:'rgba(255,255,255,0.06)' } }
+        }
+      }
+    });
+  }
+};
+
+function formatDateHuman(dateStr){
+  const d = new Date(dateStr+'T00:00:00');
+  return d.toLocaleDateString('id-ID', {weekday:'short', day:'2-digit', month:'short', year:'numeric'});
+}
+
+/* ---------------------------------------------------------------
+   REMINDER MODULE
+   --------------------------------------------------------------- */
+const Reminder = {
+  init(){
+    document.getElementById('targetSleep').value = settings.targetSleep;
+    document.getElementById('targetWake').value = settings.targetWake;
+    this.setToggle(settings.notifyEnabled);
+    this.tickCountdown();
+    setInterval(()=>this.tickCountdown(), 1000);
+    setInterval(()=>this.checkNotify(), 30000);
+  },
+  setToggle(on){
+    settings.notifyEnabled = on;
+    document.getElementById('notifToggle').classList.toggle('on', on);
+  },
+  tickCountdown(){
+    const targetMin = TimeUtils.toMinutes(settings.targetSleep);
+    const nowMin = TimeUtils.nowMinutes();
+    let diff = targetMin - nowMin;
+    if(diff <= 0) diff += 1440;
+    const h = Math.floor(diff/60), m = Math.floor(diff%60);
+    document.getElementById('countdownValue').textContent = `${String(h).padStart(2,'0')}j ${String(m).padStart(2,'0')}m`;
+    document.getElementById('countdownLabel').textContent = `Menuju waktu tidur (${settings.targetSleep})`;
+  },
+  async checkNotify(){
+    if(!settings.notifyEnabled) return;
+    if(!('Notification' in window) || Notification.permission !== 'granted') return;
+    const targetMin = TimeUtils.toMinutes(settings.targetSleep);
+    const nowMin = TimeUtils.nowMinutes();
+    let diff = targetMin - nowMin;
+    if(diff < 0) diff += 1440;
+    const today = TimeUtils.todayStr();
+    // Kirim notifikasi sekali per hari, 15 menit sebelum target tidur.
+    if(diff <= 15 && diff >= 14 && settings.lastNotifiedDate !== today){
+      new Notification('Somnia — Waktunya bersiap tidur', {
+        body: `Target tidurmu jam ${settings.targetSleep}, 15 menit lagi.`
+      });
+      settings.lastNotifiedDate = today;
+      Storage.saveSettings(settings);
+    }
+  }
+};
+
+/* ---------------------------------------------------------------
+   APP CONTROLLER
+   --------------------------------------------------------------- */
+const App = {
+  openAdd(){
+    document.getElementById('modalTitle').textContent = 'Catat Tidur';
+    document.getElementById('entryForm').reset();
+    document.getElementById('entryId').value = '';
+    document.getElementById('entryDate').value = TimeUtils.todayStr();
+    document.getElementById('deleteEntryBtn').style.display = 'none';
+    document.getElementById('modalOverlay').classList.add('open');
+  },
+  openEdit(id){
+    const e = entries.find(x=>x.id===id);
+    if(!e) return;
+    document.getElementById('modalTitle').textContent = 'Edit Catatan';
+    document.getElementById('entryId').value = e.id;
+    document.getElementById('entryDate').value = e.date;
+    document.getElementById('entrySleep').value = e.sleep;
+    document.getElementById('entryWake').value = e.wake;
+    document.getElementById('deleteEntryBtn').style.display = 'inline-flex';
+    document.getElementById('modalOverlay').classList.add('open');
+  },
+  closeModal(){ document.getElementById('modalOverlay').classList.remove('open'); },
+  saveEntry(evt){
+    evt.preventDefault();
+    const id = document.getElementById('entryId').value;
+    const date = document.getElementById('entryDate').value;
+    const sleep = document.getElementById('entrySleep').value;
+    const wake = document.getElementById('entryWake').value;
+    if(!date || !sleep || !wake){ toast('Lengkapi semua kolom.'); return; }
+
+    if(id){
+      const idx = entries.findIndex(x=>x.id===id);
+      if(idx>-1) entries[idx] = { ...entries[idx], date, sleep, wake };
+      toast('Catatan diperbarui.');
+    } else {
+      // Cegah duplikat tanggal — jika sudah ada, perbarui saja.
+      const existingIdx = entries.findIndex(x=>x.date===date);
+      if(existingIdx > -1){
+        entries[existingIdx] = { ...entries[existingIdx], sleep, wake };
+        toast('Catatan untuk tanggal ini sudah ada, diperbarui.');
+      } else {
+        entries.push({ id: crypto.randomUUID(), date, sleep, wake });
+        toast('Catatan disimpan.');
+      }
+    }
+    Storage.saveEntries(entries);
+    App.closeModal();
+    refresh();
+  },
+  deleteEntry(id){
+    if(!confirm('Hapus catatan ini?')) return;
+    entries = entries.filter(x=>x.id!==id);
+    Storage.saveEntries(entries);
+    toast('Catatan dihapus.');
+    refresh();
+  }
+};
+
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(window.__toastTimer);
+  window.__toastTimer = setTimeout(()=>el.classList.remove('show'), 2600);
+}
+
+/* ---------------------------------------------------------------
+   EXPORT / IMPORT / BACKUP
+   --------------------------------------------------------------- */
+function downloadFile(filename, content, mime){
+  const blob = new Blob([content], {type:mime});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportCsv(){
+  const enriched = Stats.enrich(entries);
+  const header = 'Tanggal,Jam Tidur,Jam Bangun,Durasi (menit),Selisih Tidur (menit),Selisih Bangun (menit),Status\n';
+  const rows = enriched.map(e => [
+    e.date, e.sleep, e.wake, e.durationMin,
+    e.sleepDiff ?? '', e.wakeDiff ?? '', e.status ? e.status.label : ''
+  ].join(',')).join('\n');
+  downloadFile(`somnia-riwayat-${TimeUtils.todayStr()}.csv`, header+rows, 'text/csv');
+  toast('CSV diunduh.');
+}
+function exportJson(){
+  downloadFile(`somnia-riwayat-${TimeUtils.todayStr()}.json`, JSON.stringify(entries, null, 2), 'application/json');
+  toast('JSON diunduh.');
+}
+function importData(file){
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      let imported = [];
+      if(file.name.endsWith('.json')){
+        imported = JSON.parse(reader.result);
+      } else {
+        const lines = reader.result.trim().split('\n').slice(1);
+        imported = lines.map(line=>{
+          const [date, sleep, wake] = line.split(',');
+          return { id: crypto.randomUUID(), date, sleep, wake };
+        });
+      }
+      imported.forEach(imp=>{
+        if(!imp.date || !imp.sleep || !imp.wake) return;
+        const idx = entries.findIndex(x=>x.date===imp.date);
+        if(idx>-1) entries[idx] = { ...entries[idx], sleep:imp.sleep, wake:imp.wake };
+        else entries.push({ id: imp.id || crypto.randomUUID(), date:imp.date, sleep:imp.sleep, wake:imp.wake });
+      });
+      Storage.saveEntries(entries);
+      toast(`${imported.length} catatan diimpor.`);
+      refresh();
+    }catch(e){ toast('Gagal mengimpor file.'); }
+  };
+  reader.readAsText(file);
+}
+function backupAll(){
+  const payload = { entries, settings, exportedAt: new Date().toISOString() };
+  downloadFile(`somnia-backup-${TimeUtils.todayStr()}.json`, JSON.stringify(payload, null, 2), 'application/json');
+  toast('Backup dibuat.');
+}
+function restoreAll(file){
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const payload = JSON.parse(reader.result);
+      if(payload.entries) entries = payload.entries;
+      if(payload.settings) settings = { ...settings, ...payload.settings };
+      Storage.saveEntries(entries);
+      Storage.saveSettings(settings);
+      toast('Data berhasil dipulihkan.');
+      refresh();
+      Reminder.init();
+    }catch(e){ toast('File backup tidak valid.'); }
+  };
+  reader.readAsText(file);
+}
+
+/* ---------------------------------------------------------------
+   EVENT BINDINGS
+   --------------------------------------------------------------- */
+document.getElementById('openAddModalBtn').addEventListener('click', App.openAdd);
+document.getElementById('fabAdd').addEventListener('click', App.openAdd);
+document.getElementById('modalCloseBtn').addEventListener('click', App.closeModal);
+document.getElementById('modalOverlay').addEventListener('click', (e)=>{ if(e.target.id==='modalOverlay') App.closeModal(); });
+document.getElementById('entryForm').addEventListener('submit', App.saveEntry);
+document.getElementById('deleteEntryBtn').addEventListener('click', ()=>{
+  const id = document.getElementById('entryId').value;
+  App.closeModal();
+  if(id) App.deleteEntry(id);
+});
+
+document.getElementById('searchInput').addEventListener('input', ()=>refresh());
+document.getElementById('monthFilter').addEventListener('change', ()=>refresh());
+document.getElementById('sortOrder').addEventListener('change', (e)=>{ sortDir = e.target.value; refresh(); });
+document.querySelectorAll('#historyTable thead th[data-sort]').forEach(th=>{
+  th.addEventListener('click', ()=>{ sortKey = th.dataset.sort; refresh(); });
+});
+
+document.querySelectorAll('.chart-tab').forEach(tab=>{
+  tab.addEventListener('click', ()=>{
+    document.querySelectorAll('.chart-tab').forEach(t=>t.classList.remove('active'));
+    tab.classList.add('active');
+    chartMode = tab.dataset.chart;
+    refresh();
+  });
+});
+
+document.getElementById('saveTargetBtn').addEventListener('click', ()=>{
+  settings.targetSleep = document.getElementById('targetSleep').value || settings.targetSleep;
+  settings.targetWake = document.getElementById('targetWake').value || settings.targetWake;
+  Storage.saveSettings(settings);
+  toast('Target tersimpan.');
+  Reminder.tickCountdown();
+});
+document.getElementById('notifToggle').addEventListener('click', async ()=>{
+  if(!settings.notifyEnabled){
+    if('Notification' in window){
+      const perm = await Notification.requestPermission();
+      if(perm !== 'granted'){ toast('Izin notifikasi ditolak.'); return; }
+    } else {
+      toast('Browser tidak mendukung notifikasi.');
+      return;
+    }
+  }
+  Reminder.setToggle(!settings.notifyEnabled);
+  Storage.saveSettings(settings);
+});
+
+document.getElementById('exportCsvBtn').addEventListener('click', exportCsv);
+document.getElementById('exportJsonBtn').addEventListener('click', exportJson);
+document.getElementById('importBtn').addEventListener('click', ()=>document.getElementById('importFile').click());
+document.getElementById('importFile').addEventListener('change', (e)=>{ if(e.target.files[0]) importData(e.target.files[0]); e.target.value=''; });
+document.getElementById('backupBtn').addEventListener('click', backupAll);
+document.getElementById('restoreBtn').addEventListener('click', ()=>document.getElementById('restoreFile').click());
+document.getElementById('restoreFile').addEventListener('change', (e)=>{ if(e.target.files[0]) restoreAll(e.target.files[0]); e.target.value=''; });
+document.getElementById('clearAllBtn').addEventListener('click', ()=>{
+  if(!confirm('Yakin ingin menghapus SEMUA data tidur? Tindakan ini tidak bisa dibatalkan.')) return;
+  entries = [];
+  Storage.saveEntries(entries);
+  toast('Semua data dihapus.');
+  refresh();
+});
+
+// Scrollspy sederhana untuk nav pills
+const sections = ['insight','statistik','grafik','riwayat','pengingat','data'].map(id=>document.getElementById(id));
+window.addEventListener('scroll', ()=>{
+  let current = sections[0].id;
+  sections.forEach(sec=>{ if(window.scrollY >= sec.offsetTop - 140) current = sec.id; });
+  document.querySelectorAll('.nav-pill').forEach(p=>{
+    p.classList.toggle('active', p.getAttribute('href') === '#'+current);
+  });
+}, {passive:true});
+
+/* ---------------------------------------------------------------
+   INIT
+   --------------------------------------------------------------- */
+// Isi contoh data jika kosong, agar pengguna langsung melihat tampilan terisi
+// (dapat dihapus kapan saja lewat "Hapus Semua Data").
+// Isi contoh data HANYA pada pemakaian pertama kali (dideteksi lewat flag
+// terpisah di localStorage), bukan setiap kali entries kosong — supaya jika
+// pengguna sengaja menghapus semua data, contoh data tidak muncul lagi.
+const INIT_FLAG_KEY = 'somnia_seeded_v1';
+if(entries.length === 0 && !localStorage.getItem(INIT_FLAG_KEY)){
+  const today = new Date();
+  const seed = [];
+  const pattern = [
+    ['23:40','07:10'], ['23:55','07:05'], ['00:10','07:20'], ['23:30','06:50'],
+    ['00:30','08:00'], ['01:10','08:45'], ['23:50','07:00']
+  ];
+  for(let i=6;i>=0;i--){
+    const d = new Date(today); d.setDate(d.getDate()-i);
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const [sleep, wake] = pattern[6-i];
+    seed.push({ id: crypto.randomUUID(), date: dateStr, sleep, wake });
+  }
+  entries = seed;
+  Storage.saveEntries(entries);
+}
+localStorage.setItem(INIT_FLAG_KEY, '1');
+
+Reminder.init();
+refresh();
+</script>
+</body>
+</html>
